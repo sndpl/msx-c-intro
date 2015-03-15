@@ -1,0 +1,9 @@
+# Composer is a development-only dependency (in this example)
+# Do not version it.
+
+*.com
+*.rel
+
+# OS-X Files
+.DS_Store
+
