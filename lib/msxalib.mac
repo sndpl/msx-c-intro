@@ -1,0 +1,681 @@
+	cseg
+
+;--- dummy ---
+	MODULE	DMY1
+	ENDMODULE
+
+;--- GINIT ---
+	MODULE	GINIT
+EXPTBL	equ	0fcc1h		;slot address of BIOS ROM
+GINIT@::
+	ld	hl,6
+	ld	a,(EXPTBL)
+	call	000ch
+	ld	(RDPORT@),a
+	ld	hl,7
+	ld	a,(EXPTBL)
+	call	000ch
+	ei
+	ld	(WRPORT@),a
+	ret
+	dseg
+RDPORT@::
+	db	98h	;This initial value is for ill-behaviored
+WRPORT@::
+	db	98h	;programs
+	cseg
+	ENDMODULE
+
+;--- CALBIO ---
+	MODULE	CALBIO
+CALSLT	equ	001ch
+EXPTBL	equ	0fcc1h		;slot address of BIOS ROM
+CALBIO@::
+	push	hl
+	pop	ix
+	push	de
+	ex	de,hl
+	ld	iy,0
+	add	iy,sp
+	di
+	ld	sp,hl
+	pop	af
+	pop	bc
+	pop	de
+	pop	hl
+	ei
+	ld	sp,iy
+	push	iy
+	ld	iy,(EXPTBL-1)
+	call	CALSLT
+	pop	iy
+	exx
+	pop	hl
+	ld	bc,8
+	add	hl,bc
+	di
+	ld	sp,hl
+	exx
+	push	hl
+	push	de
+	push	bc
+	push	af
+	ei
+	ld	sp,iy
+	pop	af
+	ret
+	ENDMODULE
+
+;--- SETADR ---
+;low level routine for SETRD and SETWRT
+;entry	HL..read/write address
+	MODULE	SETADR
+ACPAGE	equ	0faf6h
+EXBRSA	equ	0faf8h
+SCRMOD	equ	0fcafh
+SETADR::
+	ld	c,a
+	inc	c
+	ld	a,(EXBRSA)
+	or	a		;MSX1?
+	jr	z,SETAD3	;yes
+	ld	a,(SCRMOD)
+	cp	5
+	jr	c,SETAD3
+	ld	b,h		;extract the high address
+	cp	7
+	ld	a,(ACPAGE)
+	jr	c,SETAD1
+	sla	b
+	rla
+	jr	SETAD2
+SETAD1:
+	sla	b
+SETAD2:
+	sla	b
+	rla
+	di
+	out	(c),a		;set data to be written
+	ld	a,14+80h	;set it ti registar #14
+	out	(c),a
+SETAD3:
+	di
+	out	(c),l		;set the low address
+	ld	a,h		;prepare to set the middle address
+	and	3fh
+	ret
+	ENDMODULE
+
+;--- SETWRT ---
+;sets up the VDP for write
+	MODULE	SETWRT
+	extrn	SETADR
+	extrn	WRPORT@
+SETWRT@::
+	ld	a,(WRPORT@)
+	call	SETADR
+	or	01000000b	;set the low address with write bit
+	out	(c),a
+	dec	c
+	ei
+	ret
+	ENDMODULE
+
+;--- SETRD ---
+;sets up the VDP for read
+	MODULE	SETRD
+	extrn	SETADR
+	extrn	RDPORT@
+SETRD@::
+	ld	a,(RDPORT@)
+	call	SETADR
+	out	(c),a
+	dec	c
+	ei
+	ret
+	ENDMODULE
+
+;--- VPOKE ---
+;writes to the VRAM
+	MODULE	VPOKE
+	extrn	SETWRT@
+VPOKE@::
+	call	SETWRT@
+	out	(c),e
+	ret
+	ENDMODULE
+
+;--- VPEEK ---
+;reads the VRAM
+	MODULE	VPEEK
+	extrn	SETRD@
+VPEEK@::
+	call	SETRD@
+	in	a,(c)
+	ret
+	ENDMODULE
+
+;--- LDIRVM ---
+;moves block from memory to the VRAM
+	MODULE	LDIRVM
+	extrn	SETWRT@
+LDIRVM@::
+	push	bc		;save length
+	call	SETWRT@
+	ex	de,hl		;C..(WRPORT@)
+	pop	de		;HL..pointer to source	DE..length
+	ld	b,e		;set lower byte of length
+	ld	a,e
+	or	a
+	ld	a,d		;set higher byte of length
+	jr	z,LDIRV1
+	inc	a
+LDIRV1:
+	outi
+	jp	nz,LDIRV1
+	dec	a
+	jp	nz,LDIRV1
+	ret
+	ENDMODULE
+
+;--- LDIRMV ---
+;moves block from VRAM to memory
+	MODULE	LDIRMV
+	extrn	SETRD@
+LDIRMV@::
+	ex	de,hl		;HL..pointer to source
+	push	bc		;save length
+	call	SETRD@
+	ex	de,hl		;C..(RDPORT@)
+	pop	de		;HL..pointer to destination  DE..length
+	ld	b,e		;set lower byte of length
+	ld	a,e
+	or	a
+	ld	a,d		;set higher byte of length
+	jr	z,LDIRM1
+	inc	a
+LDIRM1:
+	ini
+	jp	nz,LDIRM1
+	dec	a
+	jp	nz,LDIRM1
+	ret
+	ENDMODULE
+
+;--- FILVRM ---
+;fills the VRAM
+	MODULE	FILVRM
+	extrn	SETWRT@
+FILVRM@::
+	push	bc     		;save data
+	call	SETWRT@
+	pop	hl		;L..data  DE..length  C..(WPORT@)
+	ld	b,e		;set lower byte of length
+	ld	a,e
+	or	a
+	ld	a,d		;set higher byte of length
+	jr	z,FILVR1
+	inc	a
+FILVR1:
+	out	(c),l
+	djnz	FILVR1
+	dec	a
+	jr	nz,FILVR1
+	ret
+	ENDMODULE
+
+;--- GETSTAT ---
+; Wait VDP Ready
+;modify af,bc
+	MODULE	GETSTAT
+	extrn	WRPORT@
+	extrn	RDPORT@
+GETSTAT::
+	push	bc
+	ld	bc,(WRPORT@)	;Read Status Register Specified by A
+	inc	c
+	out	(c),a
+	ld	a,8fh
+	out	(c),a
+	ld	bc,(RDPORT@)
+	inc	c
+	in	a,(c)
+	pop	bc
+	ret
+	ENDMODULE
+
+;--- WAITVDP ---
+	MODULE	WAITVDP
+	extrn	GETSTAT
+WAITVDP::
+	ld	a,2
+	call	GETSTAT
+	and	1
+	jr	nz,WAITVDP
+	xor	a
+	jp	GETSTAT
+	ENDMODULE
+
+;--- BOXFIL ---
+	MODULE	BOXFIL
+	extrn	WAITVDP
+	extrn	WRPORT@
+ACPAGE	equ	0faf6h
+LINWRK	equ	0fc18h
+SCRMOD	equ	0fcafh
+BOXFIL@::
+	pop	iy		;return address
+	ld	(LINWRK+4),hl	;save x start
+	ld	a,(SCRMOD)
+	cp	7
+	ld	a,(ACPAGE)	;active page
+	jr	c,BOXFI1
+	add	a,a
+BOXFI1:
+	add	a,d
+	ld	(LINWRK+7),a	;save y start
+	ld	a,e
+	ld	(LINWRK+6),a
+	ld	a,4
+	or	a
+	sbc	hl,bc		;hl..x start - x end
+	jr	nc,BOXFI2
+	ld	c,l
+	ld	b,h
+	ld	hl,0
+	or	a
+	sbc	hl,bc
+	xor	a
+BOXFI2:
+	inc	hl
+	ld	(LINWRK+8),hl	;save number of dots for x
+	ld	(LINWRK+13),a	;arg
+	pop	hl		;hl..y end
+	or	a
+	sbc	hl,de		;hl..y end - y start
+	jr	nc,BOXFI3
+	ex	de,hl
+	ld	hl,0
+	or	a
+	sbc	hl,de
+	ld	a,(LINWRK+13)
+	set	3,a
+	ld	(LINWRK+13),a
+BOXFI3:
+	inc	hl
+	ld	(LINWRK+10),hl	;save number of dots for y
+	pop	hl
+	ld	a,l
+	ld	(LINWRK+12),a	;color code
+	pop	hl		;logical operation
+	ld	a,l
+	or	10000000b	;LMMV command
+	ld	(LINWRK+14),a
+	push	hl		;adjust stack
+	push	hl
+	push	hl
+	push	iy		;return address
+	ld	hl,LINWRK+4
+	di
+	call	WAITVDP
+	ld	a,(WRPORT@)
+	ld	c,a
+	inc	c
+	ld	a,36
+	out	(c),a
+	ld	a,17+80h
+	out	(c),a
+	inc	c
+	inc	c
+	ld	b,11
+	otir
+	ei
+	ret
+	ENDMODULE
+
+;--- LINE ---
+	MODULE	LINE
+	extrn	WAITVDP
+	extrn	WRPORT@
+ACPAGE	equ	0faf6h
+LINWRK	equ	0fc18h
+SCRMOD	equ	0fcafh
+LINE@::
+	pop	iy		;return address
+	ld	(LINWRK+4),hl	;save x start
+	ld	a,(SCRMOD)
+	cp	7
+	ld	a,(ACPAGE)	;active page
+	jr	c,LINE1
+	ADD	a,a
+LINE1:
+	add	a,d
+	ld	(LINWRK+7),a	;save y start
+	ld	a,e
+	ld	(LINWRK+6),a
+	ld	a,4
+	or	a
+	sbc	hl,bc		;hk..x start - x end
+	jr	nc,LINE2
+	ld	c,l
+	ld	b,h
+	ld	hl,0
+	or	a
+	sbc	hl,bc
+	xor	a
+LINE2:
+	ld	(LINWRK+8),hl	;save number of dots for x
+	ld	(LINWRK+13),a	;arg
+	pop	hl		;hl..y end
+	or a
+	sbc	hl,de		;hl..y end - y start
+	jr	nc,LINE3
+	ex	de,hl
+	ld	hl,0
+	or	a
+	sbc	hl,de
+	ld	a,(LINWRK+13)
+	set	3,a
+	ld	(LINWRK+13),a
+LINE3:
+	ld	de,(LINWRK+8)	;number of dots for x
+	or	a
+	sbc	hl,de
+	jr	nc,LINE4
+	add	hl,de
+	ld	(LINWRK+10),hl	;save number of dots for y
+	jr	LINE5
+LINE4:
+	ld	a,(LINWRK+13)
+	set	0,a
+	ld	(LINWRK+13),a
+	ld	(LINWRK+10),de	;save number of dots for x
+	add	hl,de
+	ld	(LINWRK+8),hl	;number of dots for y
+LINE5:
+	pop	hl
+	ld	a,l
+	ld	(LINWRK+12),a	;color code
+	pop	hl		;logical operation
+	ld	a,l
+	or	01110000b	;LINE command
+	ld	(LINWRK+14),a
+	push	hl		;adjust stack
+	push	hl
+	push	hl
+	push	iy		;return address
+	ld	hl,LINWRK+4
+	di
+	call	WAITVDP
+	ld	a,(WRPORT@)
+	ld	c,a
+	inc	c
+	ld	a,36
+	out	(c),a
+	ld	a,17+80h
+	out	(c),a
+	inc	c
+	inc	c
+	ld	b,11
+	otir
+	ei
+	ret
+	ENDMODULE
+
+;--- CPYM2V ---
+	MODULE	CPYM2V
+	extrn	WAITVDP
+	extrn	GETSTAT
+	extrn	WRPORT@
+LINWRK	equ	0fc18h
+SCRMOD	equ	0fcafh
+CPYM2V@::
+	pop	iy		;return address
+	ld	a,e
+	and	3
+	rlca
+	rlca
+	ld	(LINWRK+13),a	;arg
+	ld	(LINWRK+4),bc	;save destination x start
+	pop	bc		;destination y start
+	pop	de		;destination page
+	ld	a,(SCRMOD)
+	cp	7
+	ld	a,e
+	jr	c,CPYMV1
+	add	a,a
+CPYMV1:
+	add	a,b
+	ld	(LINWRK+7),a	;save destination y start
+	ld	a,c
+	ld	(LINWRK+6),a
+	pop	bc		;logop
+	ld	a,c
+	or	10110000b	;LMMC command
+	ld	(LINWRK+14),a
+	ld	de,LINWRK+8
+	ld	bc,4
+	ldir
+	ld	a,(hl)
+	ld	(LINWRK+12),a
+	push	hl		;adjust stack
+	push	hl
+	push	hl
+	push	iy		;return address
+;
+	push	hl
+	ld	hl,LINWRK+4
+	di
+	call	WAITVDP
+	ld	a,(WRPORT@)
+	ld	c,a
+	inc	c
+	ld	a,36
+	out	(c),a
+	ld	a,17+80h
+	out	(c),a
+	inc	c
+	inc	c
+	ld	b,11
+	otir
+	pop	hl
+;
+	dec	c
+	dec	c		;C:port#1's address
+CPYMV2:
+	ld	a,2
+	call	GETSTAT
+	bit	0,a
+	jr	z,CPYMV3	;check CE bit
+	bit	7,a
+	jr	z,CPYMV2	;check TR bit
+	inc	hl
+	ld	a,(hl)
+	out	(c),a
+	ld	a,80h+44
+	out	(c),a
+	jr	CPYMV2
+CPYMV3:
+	xor	a
+	call	GETSTAT
+	ei
+	ret
+	ENDMODULE
+
+;--- CPYV2V ---
+	MODULE	CPYV2V
+	extrn	WAITVDP
+	extrn	WRPORT@
+LINWRK	equ	0fc18h
+SCRMOD	equ	0fcafh
+CPYV2V@::
+	pop	iy		;return address
+	ld	(LINWRK),hl	;save source x start
+	ld	a,4
+	or	a
+	sbc	hl,bc		;hl..sx start - sx end
+	jr	nc,CPYVV1
+	ld	c,l
+	ld	b,h
+	ld	hl,0
+	or	a
+	sbc	hl,bc
+	xor	a
+CPYVV1:
+	inc	hl
+	ld	(LINWRK+8),hl	;save number of dots for x
+	ld	(LINWRK+13),a	;arg
+	pop	hl		;hl..source y end
+	pop	bc
+	ld	a,(SCRMOD)
+	cp	7
+	ld	a,c
+	jr	c,CPYVV2
+	add	a,a
+CPYVV2:
+	add	a,d
+	ld	(LINWRK+3),a	;save source y start
+	ld	a,e
+	ld	(LINWRK+2),a
+	or	a
+	sbc	hl,de		;hl..sy end - sy start
+	jr	nc,CPYVV3
+	ex	de,hl
+	ld	hl,0
+	or	a
+	sbc	hl,de
+	ld	a,(LINWRK+13)
+	set	3,a
+	ld	(LINWRK+13),a
+CPYVV3:
+	inc	hl
+	ld	(LINWRK+10),hl	;save number of dots for y
+	pop	hl		;destination x start
+	pop	de		;destination y start
+	pop	bc		;destination page
+	ld	(LINWRK+4),hl
+	ld	a,(SCRMOD)
+	cp	7
+	ld	a,c
+	jr	c,CPYVV4
+	add	a,a
+CPYVV4:
+	add	a,d
+	ld	(LINWRK+7),a	;save destination y start
+	ld	a,e
+	ld	(LINWRK+6),a
+	pop	hl		;logical operation
+	ld	a,l
+	or	10010000b	;LMMM command
+	ld	(LINWRK+14),a
+	push	hl		;adjust stack
+	push	hl
+	push	hl
+	push	hl
+	push	hl
+	push	hl
+	push	iy		;return address
+	ld	hl,LINWRK
+	di
+	call	WAITVDP
+	ld	a,(WRPORT@)
+	ld	c,a
+	inc	c
+	ld	a,32
+	out	(c),a
+	ld	a,17+80h
+	out	(c),a
+	inc	c
+	inc	c
+	ld	b,15
+	otir
+	ei
+	ret
+	ENDMODULE
+
+;--- PALETT ---
+;set palette datum
+	MODULE	PALETT
+	extrn	WRPORT@
+PALETT@::
+;set palette
+;entry	b...palette number  e..red*8+blue  d..green
+	pop	ix
+	ld	b,l
+	pop	hl
+	ld	a,c
+	and	7
+	ld	d,a
+	ld	a,e
+	and	7
+	rlca
+	rlca
+	rlca
+	rlca
+	ld	e,a
+	ld	a,l
+	and	7
+	or	e
+	ld	e,a
+	push	hl
+	push	ix
+	ld	a,(WRPORT@)
+	ld	c,a
+	inc	c
+	di
+	out	(c),b		;palette number
+	ld	a,16+80h
+	out	(c),a
+	inc	c
+	out	(c),e
+	push	bc
+	pop	bc
+	push	bc
+	pop	bc
+	out	(c),d
+	ei
+	ret
+	ENDMODULE
+
+;--- RND ---
+	MODULE	RND
+RND@::
+	ld	a,h
+	or	l
+	ret	z
+	ex	de,hl		;save the range
+	ld	hl,(RNDSPD@)
+	ld	b,h
+	ld	c,l
+	add	hl,hl
+	add	hl,hl
+	add	hl,bc
+	ld	(RNDSPD@),hl
+	ld	hl,(RNDSPD@+2)
+	adc	hl,hl
+	adc	hl,bc
+	ld	(RNDSPD@+2),hl
+	ld	a,h
+	ld	c,l
+	ld	hl,0
+	ld	b,16
+	srl	a
+	rr	c
+RND1:	jr	nc,RND2
+	add	hl,de
+RND2:	rr	h
+	rr	l
+	rra
+	rr	c
+	djnz	RND1
+	ret
+	dseg
+RNDSPD@::	dw	1991h,0c204h
+	cseg
+	ENDMODULE
+
+;--- dummy ---
+	MODULE	DMY2
+	ENDMODULE
+
+
