@@ -81,7 +81,7 @@ INCLUDE/MSXCLIB.H
 ```  
 *If you use DOS1 use the batch files from the DOS1 directory!*
 
-2. Copy the followin files from your MSX-C disks:  
+2. Copy the following files from your MSX-C disks:  
 ```
 LIB80.COM
 M80.COM
