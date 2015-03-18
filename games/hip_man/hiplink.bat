@@ -1,0 +1,1 @@
+l80 ck,hipinit,hipenemy,hipscore,hipman,msxclib/s,msxalib/s,clib/s,crun/s, cend, %1/n/e
