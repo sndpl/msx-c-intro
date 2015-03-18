@@ -110,18 +110,18 @@ A>CMAKE
 ## Games
 The book contains 4 games which can be found in the games directory:
 
-* Egypt (p104)
+* Egypt (p104)  
 "Egypt" is a text-based puzzle game.Your mission is to across the desert with your vehicle "@". 
 Your vehicle uses 1 food to move.You can load 5 foods at point "A" and deposit foods on each point. 
 You also can reload foods where foods are already deposited. 
 Right and left key to move.Up and down to load/deposit foods. 
-* Oicho Kabu (p112)
+* Oicho Kabu (p112)  
 "Oicho Kabu" is a Japanese traditional card game. 
 Please watch the one's digit of sum of dealt cards.If your digit is greater than COM's,you will win a bet. 
 When the number of three your cards are same,also you will win(It is called "Arashi",a hand of Oicho Kabu). 
 But if COM has 4 and 1(Shippin) or 9 and 1(Kuppin),you'll lose. 
-* Tatakare Mogura (p122)
-* Hip Man (p155)
+* Tatakare Mogura (p122)  
+* Hip Man (p155)  
 Pac Man Clone
 
 ## Links
