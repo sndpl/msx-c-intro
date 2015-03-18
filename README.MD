@@ -120,7 +120,7 @@ Right and left key to move.Up and down to load/deposit foods.
 Please watch the one's digit of sum of dealt cards.If your digit is greater than COM's,you will win a bet. 
 When the number of three your cards are same,also you will win(It is called "Arashi",a hand of Oicho Kabu). 
 But if COM has 4 and 1(Shippin) or 9 and 1(Kuppin),you'll lose. 
-* Tatakare Mogura (p122)  
+* Tatakare Mogura, alias Mole (p122)  
 * Hip Man (p155)  
 Pac Man Clone
 
