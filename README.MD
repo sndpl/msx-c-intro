@@ -6,7 +6,7 @@
 *Publication date*: December 1990  
 
 
-The second book (green cover) of the Introduction to MSX-C applies the matter explained in the first book to the development of games for MSX2 computers. The authors developed a simpel C library to handle several aspects of the MSX hardware, and provide several simple example games.
+The second book (green cover) of the Introduction to MSX-C applies the matter explained in the first book to the development of games for MSX2 computers. The authors developed a simple C library to handle several aspects of the MSX hardware, and provide several simple example games.
 
 The books can be found on the [Internet Archive](https://archive.org/details/texts):
 * [Introduction to MSX-C (first part)](https://archive.org/details/MSX-CJoukan)
